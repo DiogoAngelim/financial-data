@@ -1,7 +1,7 @@
-const fs = require('fs');
-const path = require('path');
-const yahooFinance = require('yahoo-finance2').default;
-const pLimit = require('p-limit');
+import fs from 'fs';
+import path from 'path';
+import yahooFinance from 'yahoo-finance2';
+import pLimit from 'p-limit';
 
 const EXCHANGES = [
   'BR', 'AU', 'CA', 'CH', 'crypto', 'DE', 'forex', 'HK',
