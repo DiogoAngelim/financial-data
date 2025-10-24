@@ -1,6 +1,5 @@
 # Node modules
 node_modules/
-fetch_stocks_all_exchanges.js
 
 # Logs
 npm-debug.log*
