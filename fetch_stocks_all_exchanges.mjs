@@ -8,16 +8,12 @@ const EXCHANGES = [
   'IN', 'JP', 'KSA', 'UK', 'US'
 ];
 
-const BASE_DIR = path.join('optimalstocks', 'data');
-if (!fs.existsSync(BASE_DIR)) fs.mkdirSync(BASE_DIR, { recursive: true });
+const BASE_DIR = process.cwd();
+const LOG_FILE = path.join(BASE_DIR, 'fetch.log');
 
-const LOG_FILE = path.join(BASE_DIR, 'fetch_log.txt');
-fs.writeFileSync(LOG_FILE, `Stock fetch log - ${new Date().toISOString()}\n\n`, 'utf8');
-
-// Limit total concurrent requests to Yahoo Finance
 const limit = pLimit(5);
 
-async function fetchData(symbol, outputDir, retries = 3) {
+async function fetchData(symbol, outputDir) {
   const today = new Date();
   const twoYearsAgo = new Date();
   twoYearsAgo.setFullYear(today.getFullYear() - 2);
@@ -32,7 +28,7 @@ async function fetchData(symbol, outputDir, retries = 3) {
     if (!result?.quotes?.length) {
       console.log(`No data for ${symbol}, skipping.`);
       fs.appendFileSync(LOG_FILE, `${symbol}: NO DATA\n`);
-      return;
+      return { symbol, status: 'noData' };
     }
 
     const rows = result.quotes.map(q => {
@@ -44,16 +40,16 @@ async function fetchData(symbol, outputDir, retries = 3) {
     fs.writeFileSync(path.join(outputDir, `${symbol}.csv`), csvData, 'utf8');
     console.log(`✅ ${symbol} saved`);
     fs.appendFileSync(LOG_FILE, `${symbol}: SUCCESS\n`);
+    return { symbol, status: 'success' };
 
   } catch (error) {
-    if (retries > 0) {
-      console.log(`⚠️ Retry ${symbol} (${retries} left)`);
-      await new Promise(r => setTimeout(r, 2000));
-      return fetchData(symbol, outputDir, retries - 1);
-    } else {
-      console.error(`❌ Failed ${symbol}: ${error.message}`);
-      fs.appendFileSync(LOG_FILE, `${symbol}: FAILED - ${error.message}\n`);
+    if (error?.response?.status === 404) {
+      console.log(`❌ ${symbol} not found (404).`);
+      fs.appendFileSync(LOG_FILE, `${symbol}: 404 NOT FOUND\n`);
+      return { symbol, status: '404' };
     }
+
+    throw error; // let retries handle it
   }
 }
 
@@ -65,22 +61,45 @@ async function processExchange(exchange) {
     return [];
   }
 
-  const assets = JSON.parse(fs.readFileSync(fileName, 'utf8'));
+  let assets = JSON.parse(fs.readFileSync(fileName, 'utf8'));
   const outputDir = path.join(BASE_DIR, exchange);
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-  return assets.map(asset => limit(() => fetchData(asset.symbol, outputDir)));
+  const results = await Promise.all(
+    assets.map(asset =>
+      limit(async () => {
+        for (let attempt = 0; attempt < 3; attempt++) {
+          try {
+            return await fetchData(asset.symbol, outputDir);
+          } catch (err) {
+            console.log(`⚠️ Retry ${asset.symbol} (${2 - attempt} left)`);
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        }
+        console.error(`❌ Failed ${asset.symbol} after retries.`);
+        fs.appendFileSync(LOG_FILE, `${asset.symbol}: FAILED AFTER RETRIES\n`);
+        return { symbol: asset.symbol, status: 'failed' };
+      })
+    )
+  );
+
+  // Remove all assets that returned 404
+  const removed = results.filter(r => r.status === '404').map(r => r.symbol);
+  if (removed.length) {
+    assets = assets.filter(a => !removed.includes(a.symbol));
+    fs.writeFileSync(fileName, JSON.stringify(assets, null, 2), 'utf8');
+    console.log(`Removed ${removed.length} assets from ${fileName}`);
+  }
+
+  return results;
 }
 
 async function main() {
-  let allPromises = [];
   for (const exchange of EXCHANGES) {
     console.log(`\n📡 Scheduling fetch for ${exchange}...`);
-    const promises = await processExchange(exchange);
-    allPromises = allPromises.concat(promises);
+    await processExchange(exchange);
   }
 
-  await Promise.all(allPromises);
   console.log('\n✅ All stock data fetched.');
   fs.appendFileSync(LOG_FILE, `\nAll fetches completed: ${new Date().toISOString()}\n`);
 }
