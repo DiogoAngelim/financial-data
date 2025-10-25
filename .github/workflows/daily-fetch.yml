@@ -2,7 +2,7 @@ name: Daily Stock Fetch
 
 on:
   schedule:
-    - cron: '0 0 * * *'  # daily at 00:00 UTC
+    - cron: '0 0 * * *'  # Runs daily at 00:00 UTC
   workflow_dispatch:
 
 jobs:
@@ -11,12 +11,12 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
         with:
           persist-credentials: true
 
       - name: Setup Node.js
-        uses: actions/setup-node@v3
+        uses: actions/setup-node@v4
         with:
           node-version: 18
 
@@ -28,10 +28,20 @@ jobs:
 
       - name: Commit and push updates
         run: |
-          git config --local user.email "action@github.com"
-          git config --local user.name "GitHub Action"
-          git add optimalstocks/data/*
-          git commit -m "Daily stock data update $(date +'%Y-%m-%d')" || echo "No changes to commit"
-          git push
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+
+          # Ensure we’re on the main branch
+          git checkout main || git checkout -b main
+
+          # Add updated data and logs
+          git add optimalstocks/data/*.csv optimalstocks/data/**/*.csv || true
+
+          # Commit if there are changes
+          if ! git diff --cached --quiet; then
+            git commit -m "Daily stock data update $(date +'%Y-%m-%d %H:%M:%S')"
+            git push origin main
+            echo "✅ Pushed updates to main branch"
+          else
+            echo "ℹ️ No changes to commit"
+          fi
