@@ -11,8 +11,13 @@ const EXCHANGES = [
 const BASE_DIR = path.join('.', 'public');
 if (!fs.existsSync(BASE_DIR)) fs.mkdirSync(BASE_DIR, { recursive: true });
 
-const limit = pLimit(5);
+const limit = pLimit(2); // max 2 concurrent fetches
 
+function delay(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Updated fetchData with rate-limit handling
 async function fetchData(symbol, outputDir) {
   const today = new Date();
   const twoYearsAgo = new Date();
@@ -42,9 +47,16 @@ async function fetchData(symbol, outputDir) {
 
   } catch (error) {
     const msg = error?.message || '';
-    if (msg.includes('No data found') || error?.response?.status === 404) {
+    const statusCode = error?.response?.status;
+
+    if (msg.includes('No data found') || statusCode === 404) {
       console.warn(`❌ ${symbol} not found.`);
       return { symbol, status: '404' };
+    }
+
+    if (msg.includes('Too Many Requests') || statusCode === 429) {
+      console.warn(`⚠️ ${symbol} hit rate limit.`);
+      return { symbol, status: 'rateLimited' };
     }
 
     console.error(`⚠️ Error fetching ${symbol}: ${msg}`);
@@ -52,7 +64,8 @@ async function fetchData(symbol, outputDir) {
   }
 }
 
-async function processExchange(exchange) {
+// Process symbols in a safe, sequential manner with retries
+async function processExchangeSafely(exchange) {
   const fileName = path.join(BASE_DIR, `stocks_list_${exchange}.json`);
   if (!fs.existsSync(fileName)) {
     console.warn(`File not found: ${fileName}, skipping ${exchange}`);
@@ -63,35 +76,46 @@ async function processExchange(exchange) {
   const outputDir = path.join(BASE_DIR, exchange);
   if (!fs.existsSync(outputDir)) fs.mkdirSync(outputDir, { recursive: true });
 
-  const results = await Promise.all(
-    assets.map(asset =>
-      limit(async () => {
-        let symbol = asset.symbol;
-        let status;
+  const results = [];
 
-        for (let attempt = 0; attempt < 3; attempt++) {
-          const result = await fetchData(symbol, outputDir);
+  for (const asset of assets) {
+    const symbol = asset.symbol;
+    let status;
 
-          if (result.status === 'success') {
-            status = 'success';
-            break;
-          }
+    for (let attempt = 0; attempt < 3; attempt++) {
+      const result = await fetchData(symbol, outputDir);
 
-          console.log(`⚠️ Retry ${symbol} (${2 - attempt} left)`);
-          await new Promise(r => setTimeout(r, 2000));
-        }
+      if (result.status === 'success') {
+        status = 'success';
+        break;
+      }
 
-        if (!status) {
-          console.error(`❌ Failed ${symbol} after retries.`);
-          status = 'failed';
-        }
+      if (result.status === 'rateLimited') {
+        const waitTime = 5000 + Math.random() * 5000; // 5–10s wait
+        console.warn(`⚠️ ${symbol} hit rate limit. Waiting ${Math.round(waitTime / 1000)}s before retry...`);
+        await delay(waitTime);
+        continue;
+      }
 
-        return { symbol, status };
-      })
-    )
-  );
+      if (result.status === 'error') {
+        const waitTime = 2000 + Math.random() * 2000; // 2–4s retry delay
+        console.log(`⚠️ Retry ${symbol} (${2 - attempt} left) after ${Math.round(waitTime / 1000)}s...`);
+        await delay(waitTime);
+      }
+    }
 
-  // Remove all assets that returned 404
+    if (!status) {
+      console.error(`❌ Failed ${symbol} after retries.`);
+      status = 'failed';
+    }
+
+    results.push({ symbol, status });
+
+    // Small randomized delay between symbols
+    await delay(500 + Math.random() * 1500); // 0.5–2s
+  }
+
+  // Remove assets that returned 404
   const removed = results.filter(r => r.status === '404').map(r => r.symbol);
   if (removed.length) {
     assets = assets.filter(a => !removed.includes(a.symbol));
@@ -102,13 +126,14 @@ async function processExchange(exchange) {
   return results;
 }
 
+// Main pipeline with concurrency control across exchanges
 async function main() {
   for (const exchange of EXCHANGES) {
-    console.log(`\n📡 Scheduling fetch for ${exchange}...`);
-    await processExchange(exchange);
+    console.log(`\n📡 Processing ${exchange} safely...`);
+    await limit(() => processExchangeSafely(exchange));
   }
 
-  console.log('\n✅ All stock data fetched.');
+  console.log('\n✅ All stock data fetched safely.');
 }
 
 main();
