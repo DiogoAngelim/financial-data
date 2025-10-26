@@ -26,7 +26,7 @@ async function fetchData(symbol, outputDir) {
     });
 
     if (!result?.quotes?.length) {
-      console.log(`No data for ${symbol}, skipping.`);
+      console.warn(`⚠️ No data for ${symbol}, skipping.`);
       fs.appendFileSync(LOG_FILE, `${symbol}: NO DATA\n`);
       return { symbol, status: 'noData' };
     }
@@ -43,13 +43,15 @@ async function fetchData(symbol, outputDir) {
     return { symbol, status: 'success' };
 
   } catch (error) {
-    if (error?.response?.status === 404) {
-      console.log(`❌ ${symbol} not found (404).`);
-      fs.appendFileSync(LOG_FILE, `${symbol}: 404 NOT FOUND\n`);
+    const msg = error?.message || '';
+    if (msg.includes('No data found') || error?.response?.status === 404) {
+      console.warn(`❌ ${symbol} not found.`);
+      fs.appendFileSync(LOG_FILE, `${symbol}: NOT FOUND\n`);
       return { symbol, status: '404' };
     }
 
-    throw error; // let retries handle it
+    console.error(`⚠️ Error fetching ${symbol}: ${msg}`);
+    return { symbol, status: 'error' }; // don’t throw, let retries handle
   }
 }
 
@@ -79,7 +81,7 @@ async function processExchange(exchange) {
             break;
           }
 
-          // Retry with -USD if crypto and first attempt failed
+          // Retry crypto with -USD if first attempt failed
           if (
             exchange === 'crypto' &&
             attempt === 0 &&
@@ -94,24 +96,13 @@ async function processExchange(exchange) {
               console.log(`🔄 Updating ${symbol} -> ${newSymbol} in ${fileName}`);
               fs.appendFileSync(LOG_FILE, `${symbol}: UPDATED TO ${newSymbol}\n`);
 
-              // Update assets: remove old symbol, insert new one
               assets = assets.filter(a => a.symbol !== symbol);
               assets.push({ ...asset, symbol: newSymbol });
               fs.writeFileSync(fileName, JSON.stringify(assets, null, 2), 'utf8');
 
-              // Rename old CSV if it exists
               const oldPath = path.join(outputDir, `${symbol}.csv`);
               const newPath = path.join(outputDir, `${newSymbol}.csv`);
-              if (fs.existsSync(oldPath)) {
-                try {
-                  fs.renameSync(oldPath, newPath);
-                  console.log(`📁 Renamed ${oldPath} → ${newPath}`);
-                  fs.appendFileSync(LOG_FILE, `${symbol}: CSV RENAMED\n`);
-                } catch (e) {
-                  console.error(`⚠️ Failed to rename CSV for ${symbol}:`, e.message);
-                  fs.appendFileSync(LOG_FILE, `${symbol}: RENAME FAILED (${e.message})\n`);
-                }
-              }
+              if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
 
               symbol = newSymbol;
               status = 'success';
