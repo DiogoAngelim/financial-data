@@ -8,8 +8,8 @@ const EXCHANGES = [
   'IN', 'JP', 'KSA', 'UK', 'US'
 ];
 
-const BASE_DIR = process.cwd();
-const LOG_FILE = path.join(BASE_DIR, 'fetch.log');
+const BASE_DIR = path.join('.', 'public');
+if (!fs.existsSync(BASE_DIR)) fs.mkdirSync(BASE_DIR, { recursive: true });
 
 const limit = pLimit(5);
 
@@ -27,7 +27,6 @@ async function fetchData(symbol, outputDir) {
 
     if (!result?.quotes?.length) {
       console.warn(`⚠️ No data for ${symbol}, skipping.`);
-      fs.appendFileSync(LOG_FILE, `${symbol}: NO DATA\n`);
       return { symbol, status: 'noData' };
     }
 
@@ -39,14 +38,12 @@ async function fetchData(symbol, outputDir) {
     const csvData = `Date,Open,High,Low,Close,Adj Close,Volume\n${rows.join('\n')}`;
     fs.writeFileSync(path.join(outputDir, `${symbol}.csv`), csvData, 'utf8');
     console.log(`✅ ${symbol} saved`);
-    fs.appendFileSync(LOG_FILE, `${symbol}: SUCCESS\n`);
     return { symbol, status: 'success' };
 
   } catch (error) {
     const msg = error?.message || '';
     if (msg.includes('No data found') || error?.response?.status === 404) {
       console.warn(`❌ ${symbol} not found.`);
-      fs.appendFileSync(LOG_FILE, `${symbol}: NOT FOUND\n`);
       return { symbol, status: '404' };
     }
 
@@ -59,7 +56,6 @@ async function processExchange(exchange) {
   const fileName = `stocks_list_${exchange}.json`;
   if (!fs.existsSync(fileName)) {
     console.warn(`File not found: ${fileName}, skipping ${exchange}`);
-    fs.appendFileSync(LOG_FILE, `${exchange}: FILE NOT FOUND\n`);
     return [];
   }
 
@@ -81,42 +77,12 @@ async function processExchange(exchange) {
             break;
           }
 
-          // Retry crypto with -USD if first attempt failed
-          if (
-            exchange === 'crypto' &&
-            attempt === 0 &&
-            result.status === '404' &&
-            !symbol.endsWith('-USD')
-          ) {
-            const newSymbol = `${symbol}-USD`;
-            console.log(`🔁 Retrying ${symbol} as ${newSymbol}...`);
-            const retryResult = await fetchData(newSymbol, outputDir);
-
-            if (retryResult.status === 'success') {
-              console.log(`🔄 Updating ${symbol} -> ${newSymbol} in ${fileName}`);
-              fs.appendFileSync(LOG_FILE, `${symbol}: UPDATED TO ${newSymbol}\n`);
-
-              assets = assets.filter(a => a.symbol !== symbol);
-              assets.push({ ...asset, symbol: newSymbol });
-              fs.writeFileSync(fileName, JSON.stringify(assets, null, 2), 'utf8');
-
-              const oldPath = path.join(outputDir, `${symbol}.csv`);
-              const newPath = path.join(outputDir, `${newSymbol}.csv`);
-              if (fs.existsSync(oldPath)) fs.renameSync(oldPath, newPath);
-
-              symbol = newSymbol;
-              status = 'success';
-              break;
-            }
-          }
-
           console.log(`⚠️ Retry ${symbol} (${2 - attempt} left)`);
           await new Promise(r => setTimeout(r, 2000));
         }
 
         if (!status) {
           console.error(`❌ Failed ${symbol} after retries.`);
-          fs.appendFileSync(LOG_FILE, `${symbol}: FAILED AFTER RETRIES\n`);
           status = 'failed';
         }
 
@@ -143,7 +109,6 @@ async function main() {
   }
 
   console.log('\n✅ All stock data fetched.');
-  fs.appendFileSync(LOG_FILE, `\nAll fetches completed: ${new Date().toISOString()}\n`);
 }
 
 main();
