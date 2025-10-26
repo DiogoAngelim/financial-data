@@ -18,7 +18,7 @@ jobs:
         with:
           node-version: '18'
 
-      # 3. Clean old data files (except .git/.github)
+      # 3. Remove old CSV/JSON files except .git/.github
       - name: Remove old CSV/JSON files
         run: |
           find . -type f \( -name '*.csv' -o -name '*.json' \) \
@@ -26,15 +26,13 @@ jobs:
 
       # 4. Install dependencies
       - name: Install dependencies
-        working-directory: ./financial-data
         run: npm install
 
       # 5. Run your stock fetch script
       - name: Fetch stock data
-        working-directory: ./financial-data
         run: node fetch_stocks_all_exchanges.mjs
 
-      # 6. Commit and push changes if there are any
+      # 6. Commit and push updated files
       - name: Commit and push updated data
         run: |
           git config user.name "github-actions[bot]"
