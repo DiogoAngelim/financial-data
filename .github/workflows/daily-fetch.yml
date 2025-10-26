@@ -26,10 +26,12 @@ jobs:
 
       # 4. Install dependencies
       - name: Install dependencies
+        working-directory: ./
         run: npm install
 
       # 5. Run your stock fetch script
       - name: Fetch stock data
+        working-directory: ./
         run: node fetch_stocks_all_exchanges.mjs
 
       # 6. Commit and push changes if there are any
