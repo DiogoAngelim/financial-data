@@ -28,7 +28,7 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
           
           # Add JSON files and all CSV files in first-level subfolders
-          git add stocks_list_*.json */*.csv
+          git add public/stocks_list_*.json public/**/*.csv
           
           # Only commit if there are changes
           if ! git diff --cached --quiet; then
