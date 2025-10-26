@@ -68,17 +68,68 @@ async function processExchange(exchange) {
   const results = await Promise.all(
     assets.map(asset =>
       limit(async () => {
+        let symbol = asset.symbol;
+        let status;
+
         for (let attempt = 0; attempt < 3; attempt++) {
-          try {
-            return await fetchData(asset.symbol, outputDir);
-          } catch (err) {
-            console.log(`⚠️ Retry ${asset.symbol} (${2 - attempt} left)`);
-            await new Promise(r => setTimeout(r, 2000));
+          const result = await fetchData(symbol, outputDir);
+
+          if (result.status === 'success') {
+            status = 'success';
+            break;
           }
+
+          // Retry with -USD if crypto and first attempt failed
+          if (
+            exchange === 'crypto' &&
+            attempt === 0 &&
+            result.status === '404' &&
+            !symbol.endsWith('-USD')
+          ) {
+            const newSymbol = `${symbol}-USD`;
+            console.log(`🔁 Retrying ${symbol} as ${newSymbol}...`);
+            const retryResult = await fetchData(newSymbol, outputDir);
+
+            if (retryResult.status === 'success') {
+              console.log(`🔄 Updating ${symbol} -> ${newSymbol} in ${fileName}`);
+              fs.appendFileSync(LOG_FILE, `${symbol}: UPDATED TO ${newSymbol}\n`);
+
+              // Update assets: remove old symbol, insert new one
+              assets = assets.filter(a => a.symbol !== symbol);
+              assets.push({ ...asset, symbol: newSymbol });
+              fs.writeFileSync(fileName, JSON.stringify(assets, null, 2), 'utf8');
+
+              // Rename old CSV if it exists
+              const oldPath = path.join(outputDir, `${symbol}.csv`);
+              const newPath = path.join(outputDir, `${newSymbol}.csv`);
+              if (fs.existsSync(oldPath)) {
+                try {
+                  fs.renameSync(oldPath, newPath);
+                  console.log(`📁 Renamed ${oldPath} → ${newPath}`);
+                  fs.appendFileSync(LOG_FILE, `${symbol}: CSV RENAMED\n`);
+                } catch (e) {
+                  console.error(`⚠️ Failed to rename CSV for ${symbol}:`, e.message);
+                  fs.appendFileSync(LOG_FILE, `${symbol}: RENAME FAILED (${e.message})\n`);
+                }
+              }
+
+              symbol = newSymbol;
+              status = 'success';
+              break;
+            }
+          }
+
+          console.log(`⚠️ Retry ${symbol} (${2 - attempt} left)`);
+          await new Promise(r => setTimeout(r, 2000));
         }
-        console.error(`❌ Failed ${asset.symbol} after retries.`);
-        fs.appendFileSync(LOG_FILE, `${asset.symbol}: FAILED AFTER RETRIES\n`);
-        return { symbol: asset.symbol, status: 'failed' };
+
+        if (!status) {
+          console.error(`❌ Failed ${symbol} after retries.`);
+          fs.appendFileSync(LOG_FILE, `${symbol}: FAILED AFTER RETRIES\n`);
+          status = 'failed';
+        }
+
+        return { symbol, status };
       })
     )
   );
