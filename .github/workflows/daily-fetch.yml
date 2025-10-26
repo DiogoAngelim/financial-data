@@ -10,19 +10,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
+
       - name: Set up Node.js
         uses: actions/setup-node@v3
         with:
           node-version: '18'
+
       - name: Install dependencies
         run: npm install
+
       - name: Fetch stock data
         run: node fetch_stocks_all_exchanges.mjs
+
       - name: Commit and push updated data
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add .
+          
+          # Add JSON files and all CSV files in first-level subfolders
+          git add stocks_list_*.json */*.csv
+          
+          # Only commit if there are changes
           if ! git diff --cached --quiet; then
             git commit -m "Update stock data"
             git push
