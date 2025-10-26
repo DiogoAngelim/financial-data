@@ -48,12 +48,12 @@ async function fetchData(symbol, outputDir) {
     }
 
     console.error(`⚠️ Error fetching ${symbol}: ${msg}`);
-    return { symbol, status: 'error' }; // don’t throw, let retries handle
+    return { symbol, status: 'error' };
   }
 }
 
 async function processExchange(exchange) {
-  const fileName = `stocks_list_${exchange}.json`;
+  const fileName = path.join(BASE_DIR, `stocks_list_${exchange}.json`);
   if (!fs.existsSync(fileName)) {
     console.warn(`File not found: ${fileName}, skipping ${exchange}`);
     return [];
