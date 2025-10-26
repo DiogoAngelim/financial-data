@@ -2,52 +2,45 @@ name: Daily Stock Fetch
 
 on:
   schedule:
-    - cron: '0 0 * * 0'
+    - cron: '0 0 * * 0'  # every Sunday at midnight UTC
   workflow_dispatch:
 
 jobs:
   fetch-and-push:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-        with:
-          persist-credentials: true
-          clean: true
+      # 1. Checkout the repository
+      - uses: actions/checkout@v3
 
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
+      # 2. Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
         with:
-          node-version: 18
+          node-version: '18'
 
+      # 3. Clean old data files (except .git/.github)
+      - name: Remove old CSV/JSON files
+        run: |
+          find . -type f \( -name '*.csv' -o -name '*.json' \) \
+          ! -path './.git/*' ! -path './.github/*' -delete
+
+      # 4. Install dependencies
       - name: Install dependencies
-        run: npm install p-limit yahoo-finance2
+        run: npm install
 
+      # 5. Run your stock fetch script
       - name: Fetch stock data
+        run: node fetch_stocks_all_exchanges.mjs
+
+      # 6. Commit and push changes if there are any
+      - name: Commit and push updated data
         run: |
-          # Remove old generated data files (.csv, .json) except in .git or .github
-          find . -type f \( -name "*.csv" -o -name "*.json" \) -not -path "./.git/*" -not -path "./.github/*" -delete
-
-          # Run the data fetch script
-          node fetch_stocks_all_exchanges.mjs
-
-      - name: Commit and push updates
-        run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-
-          # Ensure we’re on the main branch
-          git checkout main || git checkout -b main
-
-          # Add all updated data and logs
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
           git add .
-
-          # Commit if there are changes
           if ! git diff --cached --quiet; then
-            git commit -m "Daily stock data update $(date +'%Y-%m-%d %H:%M:%S')"
-            git push origin main
-            echo "✅ Pushed updates to main branch"
+            git commit -m "Update stock data"
+            git push
           else
-            echo "ℹ️ No changes to commit"
+            echo "No changes to commit"
           fi
