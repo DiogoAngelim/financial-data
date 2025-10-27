@@ -1,8 +1,8 @@
-name: Weekly Stock Fetch
+name: Weekly Stock Fetch - crypto
 
 on:
   schedule:
-    - cron: '0 0 * * 0'  # every Sunday at midnight UTC
+    - cron: '0 4 * * 0'   # every Sunday at 4am UTC
   workflow_dispatch:
 
 jobs:

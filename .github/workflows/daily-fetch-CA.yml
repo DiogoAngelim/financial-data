@@ -1,8 +1,8 @@
-name: Weekly Stock Fetch
+name: Weekly Stock Fetch - CA
 
 on:
   schedule:
-    - cron: '0 0 * * 0'  # every Sunday at midnight UTC
+    - cron: '0 2 * * 0'  # every Sunday at 2am UTC
   workflow_dispatch:
 
 jobs:

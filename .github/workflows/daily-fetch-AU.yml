@@ -1,4 +1,4 @@
-name: Weekly Stock Fetch
+name: Weekly Stock Fetch - AU
 
 on:
   schedule:
