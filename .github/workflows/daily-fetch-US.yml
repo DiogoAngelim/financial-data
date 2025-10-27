@@ -1,0 +1,39 @@
+name: Weekly Stock Fetch
+
+on:
+  schedule:
+    - cron: '0 0 * * 0'  # every Sunday at midnight UTC
+  workflow_dispatch:
+
+jobs:
+  fetch-and-push:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '22'
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Fetch stock data
+        run: node fetch_stocks_US.mjs
+
+      - name: Commit and push updated data
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Add JSON files and all CSV files in first-level subfolders
+          git add public/stocks_list_*.json public/**/*.csv
+          
+          # Only commit if there are changes
+          if ! git diff --cached --quiet; then
+            git commit -m "Update stock data"
+            git push
+          else
+            echo "No changes to commit"
+          fi

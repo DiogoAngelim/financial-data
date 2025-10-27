@@ -1,4 +1,4 @@
-name: Daily Stock Fetch
+name: Weekly Stock Fetch
 
 on:
   schedule:
@@ -20,7 +20,7 @@ jobs:
         run: npm install
 
       - name: Fetch stock data
-        run: node fetch_stocks_all_exchanges.mjs
+        run: node fetch_stocks_DE.mjs
 
       - name: Commit and push updated data
         run: |

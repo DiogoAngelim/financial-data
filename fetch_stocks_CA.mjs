@@ -3,10 +3,7 @@ import path from 'path';
 import yahooFinance from 'yahoo-finance2';
 import pLimit from 'p-limit';
 
-const EXCHANGES = [
-  'BR', 'AU', 'CA', 'CH', 'crypto', 'DE', 'forex', 'HK',
-  'IN', 'JP', 'KSA', 'UK', 'US'
-];
+const EXCHANGES = ['CA'];
 
 const BASE_DIR = path.join('.', 'public');
 if (!fs.existsSync(BASE_DIR)) fs.mkdirSync(BASE_DIR, { recursive: true });
