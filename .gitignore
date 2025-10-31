@@ -1,19 +1,44 @@
 # Node modules
 node_modules/
 
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# OS files
-.DS_Store
-Thumbs.db
-
 # Environment files
 .env
 .env.local
 .env.*.local
 
-# optimalstocks/data/
+# Python bytecode
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Virtual environments
+env/
+venv/
+.venv/
+ENV/
+rl_portfolio_env/
+
+# Logs
+*.log
+
+# OS files
 .DS_Store
+Thumbs.db
+
+# IDE / Editor folders
+.vscode/
+.idea/
+
+# Cache / temporary files
+cache.json          # PPO weights cache (optional: can persist or ignore)
+*.tmp
+
+# Jupyter
+.ipynb_checkpoints/
+
+# PyTorch / model files (optional: if storing large models locally)
+*.pt
+*.pth
+
+# Do NOT ignore these if you want CSVs deployed
+!public/
